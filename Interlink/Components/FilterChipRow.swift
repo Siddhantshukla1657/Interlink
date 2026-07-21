@@ -5,41 +5,44 @@ struct FilterChipRow: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                filterChip(label: "All", isSelected: selectedTypes == Set(EntityType.allCases)) {
-                    selectedTypes = Set(EntityType.allCases)
+            HStack(spacing: 10) {
+                // "All" chip
+                let isAllSelected = selectedTypes.count == EntityType.allCases.count
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selectedTypes = Set(EntityType.allCases)
+                    }
+                } label: {
+                    Text("All")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .glassPill(isSelected: isAllSelected, activeColor: Color(red: 0.1, green: 0.45, blue: 0.95))
+                        .foregroundStyle(isAllSelected ? .white : .primary)
                 }
 
+                // Category type chips
                 ForEach(EntityType.allCases) { type in
-                    filterChip(label: type.rawValue, isSelected: selectedTypes.contains(type)) {
-                        if selectedTypes.contains(type) {
-                            selectedTypes.remove(type)
-                            if selectedTypes.isEmpty {
-                                selectedTypes = Set(EntityType.allCases)
-                            }
-                        } else {
-                            selectedTypes.insert(type)
-                            if selectedTypes == Set(EntityType.allCases) {
-                                // already all selected
-                            }
+                    let isSelected = !isAllSelected && selectedTypes.contains(type) && selectedTypes.count == 1
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedTypes = [type]
                         }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(type.color)
+                                .frame(width: 7, height: 7)
+                            Text(type.rawValue)
+                                .font(.subheadline)
+                                .fontWeight(isSelected ? .semibold : .medium)
+                        }
+                        .glassPill(isSelected: isSelected, activeColor: type.color)
+                        .foregroundStyle(isSelected ? .white : .primary)
                     }
                 }
             }
-            .padding(.horizontal)
-        }
-    }
-
-    private func filterChip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.subheadline)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor : Color(.systemGray5))
-                .foregroundStyle(isSelected ? .white : .primary)
-                .clipShape(Capsule())
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
         }
     }
 }

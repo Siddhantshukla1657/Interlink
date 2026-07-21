@@ -9,6 +9,8 @@ final class Entity {
     var typeRaw: String
     var createdAt: Date
     var notes: String
+    var subtitle: String
+    var groupTag: String
     var imageData: Data?
     var positionX: Double
     var positionY: Double
@@ -30,7 +32,11 @@ final class Entity {
         name: String,
         type: EntityType,
         notes: String = "",
-        imageData: Data? = nil
+        subtitle: String = "",
+        groupTag: String = "",
+        imageData: Data? = nil,
+        positionX: Double = 0,
+        positionY: Double = 0
     ) {
         self.id = UUID()
         self.name = name
@@ -38,8 +44,10 @@ final class Entity {
         self.typeRaw = type.rawValue
         self.createdAt = Date()
         self.notes = notes
+        self.subtitle = subtitle
+        self.groupTag = groupTag
         self.imageData = imageData
-        self.positionX = 0
-        self.positionY = 0
+        self.positionX = positionX
+        self.positionY = positionY
     }
 }
