@@ -11,15 +11,15 @@ struct EntityRowView: View {
                     .fill(entity.type.color.opacity(0.18))
                     .frame(width: 44, height: 44)
 
-                if entity.name == "Alex Rivera" {
-                    Text("AR")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundStyle(entity.type.color)
-                } else if entity.name == "Elena Rodriguez" {
-                    Image(systemName: "person.crop.circle.fill")
+                if let data = entity.imageData, let uiImage = UIImage(data: data) {
+                    Image(uiImage: uiImage)
                         .resizable()
-                        .scaledToFit()
+                        .scaledToFill()
                         .frame(width: 44, height: 44)
+                        .clipShape(Circle())
+                } else if entity.type == .person {
+                    Text(entity.initials)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(entity.type.color)
                 } else {
                     Image(systemName: entity.type.icon)

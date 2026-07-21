@@ -4,10 +4,9 @@ import SwiftData
 @MainActor
 struct SampleData {
     static func seedIfNeeded(modelContext: ModelContext) {
-        let descriptor = FetchDescriptor<Entity>()
-        let count = (try? modelContext.fetchCount(descriptor)) ?? 0
-
-        guard count == 0 else { return }
+        // Disabled by default to remove dummy data and keep store clean for real user entities.
+        return
+    }
 
         let elena = Entity(
             name: "Elena Rodriguez",

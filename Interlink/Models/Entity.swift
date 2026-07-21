@@ -28,6 +28,18 @@ final class Entity {
         set { typeRaw = newValue.rawValue }
     }
 
+    var initials: String {
+        let parts = name.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        if parts.count >= 2 {
+            let first = parts[0].prefix(1).uppercased()
+            let last = parts[parts.count - 1].prefix(1).uppercased()
+            return "\(first)\(last)"
+        } else if let firstWord = parts.first, let char = firstWord.first {
+            return String(char).uppercased()
+        }
+        return "E"
+    }
+
     init(
         name: String,
         type: EntityType,

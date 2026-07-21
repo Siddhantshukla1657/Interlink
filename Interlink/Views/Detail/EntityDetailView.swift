@@ -1,11 +1,29 @@
 import SwiftUI
 import SwiftData
+import MapKit
 
 struct EntityDetailView: View {
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Bindable var entity: Entity
 
     @State private var isEditingNotes = false
+    @State private var showAddConnectionSheet = false
+    @State private var showEditSheet = false
+    @State private var showDeleteConfirmation = false
+    @State private var selectedConnectedEntity: Entity? = nil
+
+    private var groupedOutgoing: [String: [Connection]] {
+        Dictionary(grouping: entity.outgoing, by: { $0.relationshipType })
+    }
+
+    private var groupedIncoming: [String: [Connection]] {
+        Dictionary(grouping: entity.incoming, by: { $0.reverseRelationshipType })
+    }
+
+    private var totalConnectionCount: Int {
+        entity.outgoing.count + entity.incoming.count
+    }
 
     var body: some View {
         ZStack {
@@ -14,22 +32,26 @@ struct EntityDetailView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 20) {
 
-                    // Header Profile Banner
+                    // Profile Header Block
                     VStack(spacing: 8) {
                         ZStack {
                             Circle()
                                 .fill(entity.type.color.opacity(0.2))
-                                .frame(width: 80, height: 80)
+                                .frame(width: 84, height: 84)
 
-                            if entity.name == "Elena Rodriguez" || entity.type == .person {
-                                Image(systemName: "person.crop.circle.fill")
+                            if let data = entity.imageData, let img = UIImage(data: data) {
+                                Image(uiImage: img)
                                     .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 80, height: 80)
+                                    .scaledToFill()
+                                    .frame(width: 84, height: 84)
+                                    .clipShape(Circle())
+                            } else if entity.type == .person {
+                                Text(entity.initials)
+                                    .font(.system(size: 28, weight: .bold, design: .rounded))
                                     .foregroundStyle(entity.type.color)
                             } else {
                                 Image(systemName: entity.type.icon)
-                                    .font(.system(size: 36, weight: .semibold))
+                                    .font(.system(size: 38, weight: .semibold))
                                     .foregroundStyle(entity.type.color)
                             }
                         }
@@ -51,6 +73,30 @@ struct EntityDetailView: View {
                     }
                     .padding(.top, 10)
 
+                    // Embedded Map for Place entities with coordinates
+                    if entity.type == .place, let lat = entity.latitude, let lon = entity.longitude {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("LOCATION")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.secondary)
+
+                            Map(position: .constant(.camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon), distance: 1500)))) {
+                                Annotation(entity.name, coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)) {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .font(.title)
+                                        .foregroundStyle(entity.type.color)
+                                }
+                            }
+                            .frame(height: 160)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                            )
+                        }
+                        .padding(.horizontal, 20)
+                    }
+
                     // NOTES Card
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
@@ -62,6 +108,9 @@ struct EntityDetailView: View {
 
                             Button {
                                 isEditingNotes.toggle()
+                                if !isEditingNotes {
+                                    try? modelContext.save()
+                                }
                             } label: {
                                 Text(isEditingNotes ? "Done" : "Edit")
                                     .font(.system(size: 13, weight: .semibold))
@@ -87,14 +136,14 @@ struct EntityDetailView: View {
                     // CONNECTIONS SECTION
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
-                            Text("Connections")
+                            Text("Connections (\(totalConnectionCount))")
                                 .font(.system(size: 18, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.primary)
 
                             Spacer()
 
                             Button {
-                                // Add Connection action
+                                showAddConnectionSheet = true
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "plus")
@@ -109,66 +158,66 @@ struct EntityDetailView: View {
                             }
                         }
 
-                        // WORKS ON
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("WORKS ON")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.secondary)
-
-                            VStack(spacing: 8) {
-                                connectionRow(
-                                    icon: "rocket.fill",
-                                    iconColor: .orange,
-                                    title: "Project Aurora",
-                                    subtitle: "CRITICAL PRIORITY",
-                                    subtitleColor: .orange
-                                )
-
-                                connectionRow(
-                                    icon: "point.3.connected.trianglepath.dotted",
-                                    iconColor: .purple,
-                                    title: "Mesh Governance",
-                                    subtitle: "ONGOING",
-                                    subtitleColor: .purple
-                                )
+                        if totalConnectionCount == 0 {
+                            VStack(spacing: 12) {
+                                Text("No connections yet")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Button {
+                                    showAddConnectionSheet = true
+                                } label: {
+                                    Label("Connect to Entity", systemImage: "plus")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .buttonStyle(.bordered)
                             }
-                        }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 20)
+                            .glassCard(cornerRadius: 16, padding: 16)
+                        } else {
+                            // Outgoing connection groups
+                            ForEach(Array(groupedOutgoing.keys.sorted()), id: \.self) { relationshipType in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(relationshipType.uppercased())
+                                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                                        .foregroundStyle(Color.secondary)
 
-                        // KNOWS
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("KNOWS")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.secondary)
-
-                            VStack(spacing: 8) {
-                                connectionRow(
-                                    icon: "person.crop.circle.fill",
-                                    iconColor: .blue,
-                                    title: "Marcus Chen",
-                                    subtitle: "PRODUCT DESIGNER",
-                                    subtitleColor: .secondary
-                                )
-
-                                connectionRow(
-                                    icon: "person.crop.circle.fill",
-                                    iconColor: .cyan,
-                                    title: "Sarah Jenkins",
-                                    subtitle: "CHIEF ARCHITECT",
-                                    subtitleColor: .secondary
-                                )
+                                    VStack(spacing: 8) {
+                                        ForEach(groupedOutgoing[relationshipType] ?? []) { conn in
+                                            if let target = conn.to {
+                                                Button {
+                                                    selectedConnectedEntity = target
+                                                } label: {
+                                                    EntityRowView(entity: target)
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                        }
 
-                        // BASED IN
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("BASED IN")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .foregroundStyle(Color.secondary)
+                            // Incoming connection groups
+                            ForEach(Array(groupedIncoming.keys.sorted()), id: \.self) { reversePhrase in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(reversePhrase.uppercased())
+                                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                                        .foregroundStyle(Color.secondary)
 
-                            mapConnectionCard(
-                                title: "San Francisco HQ",
-                                subtitle: "Pacific Heights Studio"
-                            )
+                                    VStack(spacing: 8) {
+                                        ForEach(groupedIncoming[reversePhrase] ?? []) { conn in
+                                            if let source = conn.from {
+                                                Button {
+                                                    selectedConnectedEntity = source
+                                                } label: {
+                                                    EntityRowView(entity: source)
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
@@ -192,118 +241,42 @@ struct EntityDetailView: View {
             }
 
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 16) {
-                    Button {} label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .foregroundStyle(Color(red: 0.1, green: 0.45, blue: 0.95))
+                Menu {
+                    Button {
+                        showEditSheet = true
+                    } label: {
+                        Label("Edit Entity", systemImage: "pencil")
                     }
-                    Button {} label: {
-                        Image(systemName: "ellipsis")
-                            .foregroundStyle(Color(red: 0.1, green: 0.45, blue: 0.95))
+
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Label("Delete Entity", systemImage: "trash")
                     }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .foregroundStyle(Color(red: 0.1, green: 0.45, blue: 0.95))
                 }
             }
         }
-    }
-
-    private func connectionRow(
-        icon: String,
-        iconColor: Color,
-        title: String,
-        subtitle: String,
-        subtitleColor: Color
-    ) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.18))
-                    .frame(width: 38, height: 38)
-
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(iconColor)
+        .sheet(isPresented: $showAddConnectionSheet) {
+            AddConnectionView(sourceEntity: entity)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditEntityView(entity: entity)
+        }
+        .navigationDestination(item: $selectedConnectedEntity) { connected in
+            EntityDetailView(entity: connected)
+        }
+        .alert("Delete Entity?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                modelContext.delete(entity)
+                try? modelContext.save()
+                dismiss()
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.primary)
-
-                Text(subtitle)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(subtitleColor)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to delete \"\(entity.name)\"? This will cascade-delete all \(totalConnectionCount) connection(s) referencing it.")
         }
-        .glassCard(cornerRadius: 14, padding: 10)
-    }
-
-    private func mapConnectionCard(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .bottomLeading) {
-                // Map visual placeholder backdrop
-                LinearGradient(
-                    colors: [Color.teal.opacity(0.4), Color.blue.opacity(0.5)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(height: 100)
-                .overlay(
-                    MapGridPattern()
-                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                )
-
-                // Pin marker
-                VStack(spacing: 2) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.red)
-                        .shadow(radius: 4)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text(subtitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .padding(12)
-                .background(
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .mask(RoundedRectangle(cornerRadius: 10))
-                )
-                .padding(8)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.5), lineWidth: 1)
-        )
-    }
-}
-
-struct MapGridPattern: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let step: CGFloat = 20
-        for x in stride(from: 0, to: rect.width, by: step) {
-            path.move(to: CGPoint(x: x, y: 0))
-            path.addLine(to: CGPoint(x: x, y: rect.height))
-        }
-        for y in stride(from: 0, to: rect.height, by: step) {
-            path.move(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: rect.width, y: y))
-        }
-        return path
     }
 }
