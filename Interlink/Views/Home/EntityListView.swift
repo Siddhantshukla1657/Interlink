@@ -32,10 +32,7 @@ struct EntityListView: View {
                 VStack(spacing: 0) {
                     // Header Bar
                     HStack(spacing: 12) {
-                        Image(systemName: "point.3.connected.trianglepath.dotted")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(Color(red: 0.1, green: 0.45, blue: 0.95))
-                            .frame(width: 36, height: 36)
+                        InterlinkLogoView(size: 36)
                             .background(Circle().fill(.white.opacity(0.6)))
 
                         Text("Interlink")
@@ -99,13 +96,25 @@ struct EntityListView: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 20) {
                             if allEntities.isEmpty {
-                                EmptyStateView(
-                                    icon: "point.3.connected.trianglepath.dotted",
-                                    title: "Nothing here yet",
-                                    subtitle: "Add your first person, project, or idea to build your network graph.",
-                                    buttonTitle: "New Entity",
-                                    buttonAction: { showCreationSheet = true }
-                                )
+                                VStack(spacing: 16) {
+                                    InterlinkLogoView(size: 72)
+                                        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
+                                    Text("Nothing here yet")
+                                        .font(.title3)
+                                        .fontWeight(.semibold)
+                                    Text("Add your first person, project, or idea to build your network graph.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.center)
+                                    Button(action: { showCreationSheet = true }) {
+                                        Label("New Entity", systemImage: "plus")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .padding(.top, 4)
+                                }
+                                .padding(.horizontal, 32)
+                                .frame(maxWidth: .infinity)
                                 .padding(.top, 60)
                             } else if filteredEntities.isEmpty {
                                 EmptyStateView(
