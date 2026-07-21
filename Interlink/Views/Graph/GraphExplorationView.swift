@@ -1,37 +1,34 @@
 import SwiftUI
 import SwiftData
 
-struct GraphNode: Identifiable {
-    let id = UUID()
-    let name: String
-    let type: EntityType
-    let icon: String
-    var position: CGPoint
-}
-
-struct GraphLink: Identifiable {
-    let id = UUID()
-    let fromNodeId: UUID
-    let toNodeId: UUID
-}
-
 struct GraphExplorationView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var allEntities: [Entity]
+    @Query private var allConnections: [Connection]
 
     @State private var selectedTypes: Set<EntityType> = Set(EntityType.allCases)
     @State private var zoomScale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
 
-    // Demo nodes matching the mockup
-    @State private var nodes: [GraphNode] = [
-        GraphNode(name: "Alex Rivera", type: .person, icon: "person.fill", position: CGPoint(x: 0, y: -160)),
-        GraphNode(name: "Project Helios", type: .project, icon: "rocket.fill", position: CGPoint(x: -110, y: -20)),
-        GraphNode(name: "Berlin Office", type: .place, icon: "mappin.circle.fill", position: CGPoint(x: 110, y: -20)),
-        GraphNode(name: "Scalability", type: .concept, icon: "lightbulb.fill", position: CGPoint(x: -60, y: 130)),
-        GraphNode(name: "Architecture Doc", type: .object, icon: "doc.text.fill", position: CGPoint(x: 60, y: 130))
-    ]
+    @State private var selectedEntityForDetail: Entity? = nil
+    @State private var showRelayoutConfirmation = false
+
+    // Dragged node state
+    @State private var draggingEntityId: UUID? = nil
+    @State private var dragOffset: CGSize = .zero
+
+    private var filteredEntities: [Entity] {
+        allEntities.filter { selectedTypes.contains($0.type) }
+    }
+
+    private var filteredConnections: [Connection] {
+        let visibleIds = Set(filteredEntities.map { $0.id })
+        return allConnections.filter { conn in
+            guard let fromId = conn.from?.id, let toId = conn.to?.id else { return false }
+            return visibleIds.contains(fromId) && visibleIds.contains(toId)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -48,14 +45,10 @@ struct GraphExplorationView: View {
                         Spacer()
 
                         HStack(spacing: 16) {
-                            Button {} label: {
-                                Image(systemName: "line.3.horizontal.decrease")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(Color.primary)
-                            }
-
-                            Button {} label: {
-                                Image(systemName: "slider.horizontal.3")
+                            Button {
+                                showRelayoutConfirmation = true
+                            } label: {
+                                Image(systemName: "arrow.triangle.2.circlepath")
                                     .font(.system(size: 18, weight: .medium))
                                     .foregroundStyle(Color.primary)
                             }
@@ -73,136 +66,202 @@ struct GraphExplorationView: View {
                     GeometryReader { geo in
                         let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2 - 20)
 
-                        ZStack {
-                            // Link Lines
-                            Canvas { context, size in
-                                let alexNode = nodes[0]
-                                let heliosNode = nodes[1]
-                                let berlinNode = nodes[2]
-                                let scaleNode = nodes[3]
-                                let archNode = nodes[4]
+                        if allEntities.isEmpty {
+                            EmptyStateView(
+                                icon: "point.3.connected.trianglepath.dotted",
+                                title: "Your graph is empty",
+                                subtitle: "Add entities and connections to explore your network spatially."
+                            )
+                        } else if filteredEntities.isEmpty {
+                            EmptyStateView(
+                                icon: "line.3.horizontal.decrease.circle",
+                                title: "No entities match this filter",
+                                subtitle: "Select more categories above to view your nodes."
+                            )
+                        } else {
+                            ZStack {
+                                // Draw Edges/Links between nodes
+                                Canvas { context, size in
+                                    let nodePosMap = entityPositionMap(center: center)
 
-                                func absolutePos(_ node: GraphNode) -> CGPoint {
-                                    CGPoint(
-                                        x: center.x + node.position.x * zoomScale + offset.width,
-                                        y: center.y + node.position.y * zoomScale + offset.height
-                                    )
+                                    for conn in filteredConnections {
+                                        guard let from = conn.from, let to = conn.to,
+                                              let fromPos = nodePosMap[from.id],
+                                              let toPos = nodePosMap[to.id] else { continue }
+
+                                        var path = Path()
+                                        path.move(to: fromPos)
+                                        path.addLine(to: toPos)
+
+                                        context.stroke(
+                                            path,
+                                            with: .color(Color.gray.opacity(0.4)),
+                                            lineWidth: 1.5
+                                        )
+                                    }
                                 }
 
-                                let alexPos = absolutePos(alexNode)
-                                let heliosPos = absolutePos(heliosNode)
-                                let berlinPos = absolutePos(berlinNode)
-                                let scalePos = absolutePos(scaleNode)
-                                let archPos = absolutePos(archNode)
+                                // Nodes Render
+                                ForEach(filteredEntities) { entity in
+                                    let pos = entityRenderPosition(entity: entity, center: center)
 
-                                var path = Path()
-                                // Top node to middle nodes
-                                path.move(to: alexPos)
-                                path.addLine(to: heliosPos)
+                                    NodeBubbleView(entity: entity)
+                                        .scaleEffect(draggingEntityId == entity.id ? 1.1 : 1.0)
+                                        .position(pos)
+                                        .onTapGesture {
+                                            selectedEntityForDetail = entity
+                                        }
+                                        .gesture(
+                                            DragGesture()
+                                                .onChanged { val in
+                                                    draggingEntityId = entity.id
+                                                    dragOffset = val.translation
+                                                }
+                                                .onEnded { val in
+                                                    // Save updated position back to SwiftData
+                                                    let updatedX = entity.positionX + Double(val.translation.width / zoomScale)
+                                                    let updatedY = entity.positionY + Double(val.translation.height / zoomScale)
+                                                    entity.positionX = updatedX
+                                                    entity.positionY = updatedY
+                                                    try? modelContext.save()
 
-                                path.move(to: alexPos)
-                                path.addLine(to: berlinPos)
-
-                                // Middle vertical accent link
-                                let midTop = CGPoint(x: (heliosPos.x + berlinPos.x) / 2, y: alexPos.y + 40)
-                                let midBot = CGPoint(x: (heliosPos.x + berlinPos.x) / 2, y: scalePos.y - 40)
-                                path.move(to: midTop)
-                                path.addLine(to: midBot)
-
-                                // Middle nodes to bottom nodes
-                                path.move(to: heliosPos)
-                                path.addLine(to: scalePos)
-
-                                path.move(to: berlinPos)
-                                path.addLine(to: archPos)
-
-                                context.stroke(path, with: .color(Color.gray.opacity(0.4)), lineWidth: 1.5)
-                            }
-
-                            // Center vertical pill accent
-                            let alexPos = CGPoint(x: center.x + nodes[0].position.x * zoomScale + offset.width,
-                                                  y: center.y + nodes[0].position.y * zoomScale + offset.height)
-                            let scalePos = CGPoint(x: center.x + nodes[3].position.x * zoomScale + offset.width,
-                                                   y: center.y + nodes[3].position.y * zoomScale + offset.height)
-
-                            Capsule()
-                                .fill(Color.secondary.opacity(0.2))
-                                .frame(width: 8, height: 36)
-                                .position(x: alexPos.x, y: (alexPos.y + scalePos.y) / 2)
-
-                            // Nodes
-                            ForEach(nodes) { node in
-                                let pos = CGPoint(
-                                    x: center.x + node.position.x * zoomScale + offset.width,
-                                    y: center.y + node.position.y * zoomScale + offset.height
-                                )
-
-                                NodeBubbleView(node: node)
-                                    .position(pos)
-                            }
-
-                            // Floating Glass Hint Pill at Bottom Center
-                            VStack {
-                                Spacer()
-                                HStack {
-                                    Text("Pinch to zoom • Drag to explore")
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(Color.white.opacity(0.9))
+                                                    draggingEntityId = nil
+                                                    dragOffset = .zero
+                                                }
+                                        )
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.black.opacity(0.75))
-                                )
-                                .shadow(radius: 6)
-                                .padding(.bottom, 20)
+
+                                // Bottom Hint Pill
+                                VStack {
+                                    Spacer()
+                                    HStack {
+                                        Text("Tap node to inspect • Drag node to move • Pinch to zoom")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundStyle(Color.white.opacity(0.9))
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Capsule().fill(Color.black.opacity(0.75)))
+                                    .shadow(radius: 6)
+                                    .padding(.bottom, 20)
+                                }
                             }
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        if draggingEntityId == nil {
+                                            offset = CGSize(
+                                                width: lastOffset.width + value.translation.width,
+                                                height: lastOffset.height + value.translation.height
+                                            )
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        if draggingEntityId == nil {
+                                            lastOffset = offset
+                                        }
+                                    }
+                            )
+                            .gesture(
+                                MagnificationGesture()
+                                    .onChanged { val in
+                                        zoomScale = max(0.5, min(2.5, val))
+                                    }
+                            )
                         }
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    offset = CGSize(
-                                        width: lastOffset.width + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
-                                }
-                                .onEnded { _ in
-                                    lastOffset = offset
-                                }
-                        )
-                        .gesture(
-                            MagnificationGesture()
-                                .onChanged { val in
-                                    zoomScale = max(0.6, min(2.5, val))
-                                }
-                        )
                     }
                 }
             }
             .navigationBarHidden(true)
+            .navigationDestination(item: $selectedEntityForDetail) { entity in
+                EntityDetailView(entity: entity)
+            }
+            .onAppear {
+                ensureInitialLayout()
+            }
+            .alert("Re-arrange the graph?", isPresented: $showRelayoutConfirmation) {
+                Button("Re-layout", role: .destructive) {
+                    performRelayout()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This resets the position of all visible nodes to an automatically computed layout.")
+            }
         }
+    }
+
+    private func ensureInitialLayout() {
+        let needsLayout = allEntities.contains { $0.positionX == 0 && $0.positionY == 0 }
+        if needsLayout {
+            performRelayout()
+        }
+    }
+
+    private func performRelayout() {
+        let calculated = GraphLayoutEngine.computeLayout(entities: allEntities, connections: allConnections)
+        for entity in allEntities {
+            if let pos = calculated[entity.id] {
+                entity.positionX = pos.x
+                entity.positionY = pos.y
+            }
+        }
+        try? modelContext.save()
+    }
+
+    private func entityPositionMap(center: CGPoint) -> [UUID: CGPoint] {
+        var map: [UUID: CGPoint] = [:]
+        for entity in filteredEntities {
+            map[entity.id] = entityRenderPosition(entity: entity, center: center)
+        }
+        return map
+    }
+
+    private func entityRenderPosition(entity: Entity, center: CGPoint) -> CGPoint {
+        var posX = entity.positionX
+        var posY = entity.positionY
+
+        if draggingEntityId == entity.id {
+            posX += Double(dragOffset.width / zoomScale)
+            posY += Double(dragOffset.height / zoomScale)
+        }
+
+        return CGPoint(
+            x: center.x + posX * zoomScale + offset.width,
+            y: center.y + posY * zoomScale + offset.height
+        )
     }
 }
 
 struct NodeBubbleView: View {
-    let node: GraphNode
+    let entity: Entity
 
     var body: some View {
         VStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .fill(node.type.color)
+                    .fill(entity.type.color)
                     .frame(width: 44, height: 44)
-                    .shadow(color: node.type.color.opacity(0.4), radius: 8, x: 0, y: 4)
+                    .shadow(color: entity.type.color.opacity(0.4), radius: 8, x: 0, y: 4)
 
-                Image(systemName: node.icon)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.white)
+                if let data = entity.imageData, let img = UIImage(data: data) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 44, height: 44)
+                        .clipShape(Circle())
+                } else if entity.type == .person {
+                    Text(entity.initials)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                } else {
+                    Image(systemName: entity.type.icon)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(.white)
+                }
             }
 
-            Text(node.name)
+            Text(entity.name)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundStyle(Color.primary)
                 .padding(.horizontal, 8)
