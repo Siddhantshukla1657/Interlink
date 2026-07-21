@@ -3,17 +3,17 @@
 > **Last updated:** July 12, 2026. Check items off as they're completed; keep this file in sync with actual progress.
 
 ## Phase 1: Core entity graph
-- [ ] Define `EntityType` enum (person, project, object, concept, place)
-- [ ] Build `Entity` SwiftData model
-  - [ ] Add `normalizedName` computed at init (lowercased, trimmed)
-  - [ ] Add `positionX`/`positionY` fields (unused until Phase 3, but defined now)
-- [ ] Build `Connection` SwiftData model with `from`/`to`/`relationshipType`/`reverseRelationshipType`
-- [ ] Configure `deleteRule: .cascade` on `Entity.outgoing` and `Entity.incoming`
+- [x] Define `EntityType` enum (person, project, object, concept, place)
+- [x] Build `Entity` SwiftData model
+  - [x] Add `normalizedName` computed at init (lowercased, trimmed)
+  - [x] Add `positionX`/`positionY` fields (unused until Phase 3, but defined now)
+- [x] Build `Connection` SwiftData model with `from`/`to`/`relationshipType`/`reverseRelationshipType`
+- [x] Configure `deleteRule: .cascade` on `Entity.outgoing` and `Entity.incoming`
 - [ ] Write a manual test: create an entity with 2+ connections, delete it, confirm no crash and connections are gone
-- [ ] Build Dedup Search Service (debounced ~200ms, normalized match against `Entity.normalizedName`)
-- [ ] Build Entity Creation flow (name field with live search results + "create new" option, type picker, notes field)
-- [ ] Build Home / Entity List view (searchable, type-filterable, empty state)
-- [ ] Wire navigation: Home → Entity Creation → back to Home/Detail
+- [x] Build Dedup Search Service (debounced ~200ms, normalized match against `Entity.normalizedName`)
+- [x] Build Entity Creation flow (name field with live search results + "create new" option, type picker, notes field)
+- [x] Build Home / Entity List view (searchable, type-filterable, empty state)
+- [x] Wire navigation: Home → Entity Creation → back to Home/Detail
 
 ## Phase 2: Connections & context
 - [ ] Define preset relationship-type table (forward → reverse phrasing pairs)
