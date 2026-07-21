@@ -13,6 +13,8 @@ struct ContentView: View {
                     EntityListView()
                 case .graph:
                     GraphExplorationView()
+                case .map:
+                    PlaceMapView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -21,9 +23,7 @@ struct ContentView: View {
             CustomTabBar(selectedTab: $selectedTab)
         }
         .ignoresSafeArea(.keyboard)
-        .onAppear {
-            SampleData.seedIfNeeded(modelContext: modelContext)
-        }
+    }
     }
 }
 

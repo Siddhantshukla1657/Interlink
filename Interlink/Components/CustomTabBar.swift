@@ -3,11 +3,13 @@ import SwiftUI
 enum TabItem: String, CaseIterable {
     case home = "Home"
     case graph = "Graph"
+    case map = "Map"
 
     var icon: String {
         switch self {
         case .home: return "list.bullet"
         case .graph: return "point.3.connected.trianglepath.dotted"
+        case .map: return "map.fill"
         }
     }
 }

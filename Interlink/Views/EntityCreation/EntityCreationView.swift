@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct EntityCreationView: View {
     @Environment(\.modelContext) private var modelContext
@@ -8,7 +9,16 @@ struct EntityCreationView: View {
     @State private var name = ""
     @State private var selectedType: EntityType = .person
     @State private var notes = ""
-    @State private var selectedEntity: Entity?
+    @State private var photoItem: PhotosPickerItem? = nil
+    @State private var selectedImageData: Data? = nil
+    @State private var selectedEntity: Entity? = nil
+
+    // Place location search
+    @StateObject private var locationSearch = LocationSearchService()
+    @State private var addressQuery: String = ""
+    @State private var latitude: Double? = nil
+    @State private var longitude: Double? = nil
+    @State private var selectedAddressTitle: String = ""
 
     var body: some View {
         NavigationStack {
@@ -20,25 +30,44 @@ struct EntityCreationView: View {
 
                         // Photo Upload Container
                         VStack(spacing: 8) {
-                            ZStack {
-                                Circle()
-                                    .fill(.ultraThinMaterial)
-                                    .frame(width: 84, height: 84)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: [.blue.opacity(0.4), .purple.opacity(0.2)],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ),
-                                                style: StrokeStyle(lineWidth: 1.5, dash: [4])
-                                            )
-                                    )
+                            PhotosPicker(selection: $photoItem, matching: .images) {
+                                ZStack {
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                        .frame(width: 84, height: 84)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(
+                                                    LinearGradient(
+                                                        colors: [.blue.opacity(0.4), .purple.opacity(0.2)],
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    ),
+                                                    style: StrokeStyle(lineWidth: 1.5, dash: [4])
+                                                )
+                                        )
 
-                                Image(systemName: "camera.fill")
-                                    .font(.system(size: 26))
-                                    .foregroundStyle(Color(red: 0.1, green: 0.45, blue: 0.95))
+                                    if let data = selectedImageData, let uiImg = UIImage(data: data) {
+                                        Image(uiImage: uiImg)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 84, height: 84)
+                                            .clipShape(Circle())
+                                    } else {
+                                        Image(systemName: "camera.fill")
+                                            .font(.system(size: 26))
+                                            .foregroundStyle(Color(red: 0.1, green: 0.45, blue: 0.95))
+                                    }
+                                }
+                            }
+                            .onChange(of: photoItem) { _, newItem in
+                                Task {
+                                    if let data = try? await newItem?.loadTransferable(type: Data.self),
+                                       let uiImg = UIImage(data: data),
+                                       let compressed = ImageProcessingService.processAndCompress(uiImg) {
+                                        selectedImageData = compressed
+                                    }
+                                }
                             }
 
                             Text("ADD PHOTO")
@@ -48,32 +77,13 @@ struct EntityCreationView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 12)
 
-                        // ENTITY NAME
+                        // ENTITY NAME & DEDUP MATCHES
                         VStack(alignment: .leading, spacing: 6) {
                             Text("ENTITY NAME")
                                 .font(.system(size: 11, weight: .bold, design: .rounded))
                                 .foregroundStyle(Color.secondary)
 
-                            HStack {
-                                TextField("Searching for matches...", text: $name)
-                                    .font(.subheadline)
-
-                                Spacer()
-
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .opacity(name.isEmpty ? 0 : 0.6)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                            )
+                            NameFieldWithMatches(text: $name, selectedEntity: $selectedEntity)
                         }
 
                         // CATEGORY
@@ -103,6 +113,70 @@ struct EntityCreationView: View {
                                             .foregroundStyle(isSelected ? .white : .primary)
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        // PLACE LOCATION SEARCH
+                        if selectedType == .place {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("LOCATION ADDRESS")
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .foregroundStyle(Color.secondary)
+
+                                HStack {
+                                    Image(systemName: "mappin.and.ellipse")
+                                        .foregroundStyle(Color.secondary)
+                                    TextField("Search address for map coordinates...", text: $addressQuery)
+                                        .font(.subheadline)
+                                        .onChange(of: addressQuery) { _, newValue in
+                                            locationSearch.search(query: newValue)
+                                        }
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(.ultraThinMaterial)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                                )
+
+                                if !selectedAddressTitle.isEmpty {
+                                    Text("Selected: \(selectedAddressTitle)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                if !locationSearch.results.isEmpty {
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        ForEach(locationSearch.results.prefix(4)) { res in
+                                            Button {
+                                                latitude = res.coordinate.latitude
+                                                longitude = res.coordinate.longitude
+                                                selectedAddressTitle = res.title
+                                                addressQuery = res.title
+                                                locationSearch.results = []
+                                            } label: {
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(res.title)
+                                                        .font(.subheadline)
+                                                        .fontWeight(.semibold)
+                                                        .foregroundStyle(.primary)
+                                                    Text(res.subtitle)
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                .padding(10)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                            }
+                                            Divider()
+                                        }
+                                    }
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
                                 }
                             }
                         }
@@ -139,44 +213,6 @@ struct EntityCreationView: View {
                                     .stroke(Color.white.opacity(0.5), lineWidth: 1)
                             )
                         }
-
-                        // AUTOMATIC SUGGESTIONS
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text("Automatic Suggestions")
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Color.secondary)
-
-                                Spacer()
-
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Color(red: 0.1, green: 0.45, blue: 0.95))
-                            }
-
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Capsule()
-                                        .fill(Color.secondary.opacity(0.2))
-                                        .frame(width: 50, height: 10)
-                                    Capsule()
-                                        .fill(Color.secondary.opacity(0.15))
-                                        .frame(width: 80, height: 8)
-                                }
-                                .glassCard(cornerRadius: 12, padding: 12)
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Capsule()
-                                        .fill(Color.secondary.opacity(0.2))
-                                        .frame(width: 60, height: 10)
-                                    Capsule()
-                                        .fill(Color.secondary.opacity(0.15))
-                                        .frame(width: 70, height: 8)
-                                }
-                                .glassCard(cornerRadius: 12, padding: 12)
-                            }
-                        }
-                        .padding(.top, 6)
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 30)
@@ -207,10 +243,13 @@ struct EntityCreationView: View {
         let entity = Entity(
             name: trimmedName,
             type: selectedType,
-            notes: notes
+            notes: notes,
+            imageData: selectedImageData
         )
-        modelContext.insert(entity)
+        entity.latitude = latitude
+        entity.longitude = longitude
 
+        modelContext.insert(entity)
         try? modelContext.save()
         dismiss()
     }
