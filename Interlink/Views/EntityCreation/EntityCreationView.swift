@@ -117,7 +117,7 @@ struct EntityCreationView: View {
                                 if notes.isEmpty {
                                     Text("Define how this entity interlinks with your existing network...")
                                         .font(.subheadline)
-                                        .foregroundStyle(Color.tertiary)
+                                        .foregroundStyle(.secondary)
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 12)
                                         .allowsHitTesting(false)

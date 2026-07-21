@@ -49,7 +49,7 @@ struct EntityRowView: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.tertiary)
+                .foregroundStyle(.secondary)
         }
         .glassCard(cornerRadius: 16, padding: 12)
     }

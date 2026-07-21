@@ -238,7 +238,7 @@ struct EntityDetailView: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.tertiary)
+                .foregroundStyle(.secondary)
         }
         .glassCard(cornerRadius: 14, padding: 10)
     }
