@@ -6,7 +6,6 @@ struct SampleData {
     static func seedIfNeeded(modelContext: ModelContext) {
         // Disabled by default to remove dummy data and keep store clean for real user entities.
         return
-    }
 
         let elena = Entity(
             name: "Elena Rodriguez",
@@ -134,3 +133,4 @@ struct SampleData {
         try? modelContext.save()
     }
 }
+

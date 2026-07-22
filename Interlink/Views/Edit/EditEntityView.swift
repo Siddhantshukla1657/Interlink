@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
+import MapKit
+import CoreLocation
 
 struct EditEntityView: View {
     @Environment(\.modelContext) private var modelContext
@@ -16,10 +18,12 @@ struct EditEntityView: View {
 
     // Place location search
     @StateObject private var locationSearch = LocationSearchService()
+    @StateObject private var locationManager = LocationManager()
     @State private var addressQuery: String = ""
     @State private var latitude: Double? = nil
     @State private var longitude: Double? = nil
     @State private var selectedAddressTitle: String = ""
+    @State private var showMapPicker = false
 
     var body: some View {
         NavigationStack {
@@ -116,17 +120,59 @@ struct EditEntityView: View {
                             }
                         }
 
-                        // PLACE LOCATION SEARCH
-                        if selectedType == .place {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("LOCATION ADDRESS")
+                        // LOCATION SEARCH (Place & Person)
+                        if selectedType == .place || selectedType == .person {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("LOCATION")
                                     .font(.system(size: 11, weight: .bold, design: .rounded))
                                     .foregroundStyle(Color.secondary)
 
+                                HStack(spacing: 10) {
+                                    Button {
+                                        locationManager.requestLocation()
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "location.fill")
+                                                .font(.system(size: 13, weight: .bold))
+                                            Text("Current Location")
+                                                .font(.system(size: 13, weight: .semibold))
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 12)
+                                        .background(Capsule().fill(.ultraThinMaterial))
+                                        .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1))
+                                    }
+
+                                    Button {
+                                        showMapPicker = true
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "map.fill")
+                                                .font(.system(size: 13, weight: .bold))
+                                            Text("Select on Map")
+                                                .font(.system(size: 13, weight: .semibold))
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 12)
+                                        .background(Capsule().fill(.ultraThinMaterial))
+                                        .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1))
+                                    }
+                                }
+
+                                if locationManager.isFetching {
+                                    HStack(spacing: 6) {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                        Text("Fetching location...")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+
                                 HStack {
-                                    Image(systemName: "mappin.and.ellipse")
+                                    Image(systemName: "magnifyingglass")
                                         .foregroundStyle(Color.secondary)
-                                    TextField("Search address for map coordinates...", text: $addressQuery)
+                                    TextField("Or search address manually...", text: $addressQuery)
                                         .font(.subheadline)
                                         .onChange(of: addressQuery) { _, newValue in
                                             locationSearch.search(query: newValue)
@@ -142,12 +188,6 @@ struct EditEntityView: View {
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                                         .stroke(Color.white.opacity(0.5), lineWidth: 1)
                                 )
-
-                                if !selectedAddressTitle.isEmpty {
-                                    Text("Selected: \(selectedAddressTitle)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
 
                                 if !locationSearch.results.isEmpty {
                                     VStack(alignment: .leading, spacing: 0) {
@@ -176,6 +216,12 @@ struct EditEntityView: View {
                                     }
                                     .background(.ultraThinMaterial)
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
+
+                                if !selectedAddressTitle.isEmpty {
+                                    Label(selectedAddressTitle, systemImage: "mappin.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -214,6 +260,9 @@ struct EditEntityView: View {
                 selectedImageData = entity.imageData
                 latitude = entity.latitude
                 longitude = entity.longitude
+                if entity.latitude != nil && entity.longitude != nil && selectedAddressTitle.isEmpty {
+                    selectedAddressTitle = "Previously saved location"
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -225,6 +274,24 @@ struct EditEntityView: View {
                     }
                     .fontWeight(.semibold)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onChange(of: locationManager.currentLatitude) { _, newLat in
+                guard let lat = newLat, let lon = locationManager.currentLongitude else { return }
+                latitude = lat
+                longitude = lon
+                selectedAddressTitle = locationManager.currentAddress.isEmpty ? "Current Location" : locationManager.currentAddress
+            }
+            .sheet(isPresented: $showMapPicker) {
+                let startCoord = locationManager.currentLatitude.flatMap { lat in
+                    locationManager.currentLongitude.map { lon in
+                        CLLocationCoordinate2D(latitude: lat, longitude: lon)
+                    }
+                }
+                MapLocationPickerView(startCoordinate: startCoord) { lat, lon, title in
+                    latitude = lat
+                    longitude = lon
+                    selectedAddressTitle = title
                 }
             }
         }

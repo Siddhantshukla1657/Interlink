@@ -24,7 +24,7 @@ Interlink is a fully local iOS app that lets you:
 - Connect them with **bidirectional typed relationships** that read correctly from both sides
 - Explore the resulting network as an **interactive visual graph** you can pan, zoom, and rearrange
 - Add entities from **natural-language sentences** using on-device NLP
-- Attach **real-world addresses** to Place entities and view them on a native map
+- Attach **real-world addresses** to Place and Person entities and view them on a native map
 
 Everything lives on-device. No account required. No backend.
 
@@ -32,7 +32,25 @@ Everything lives on-device. No account required. No backend.
 
 ## Screenshots
 
-> Build and run on a device or simulator to see the app in action — no external assets required.
+### Home
+Searchable, filterable entity list with type badges and connection counts.
+<p align="center"><img src="screenshots/Home.png" width="280" alt="Home"/></p>
+
+### Profile
+Entity detail view with notes, embedded map for location-linked entities, and grouped connections.
+<p align="center"><img src="screenshots/Profile.png" width="280" alt="Profile"/></p>
+
+### Graph
+Interactive visual graph — drag nodes to rearrange, pinch to zoom, tap to inspect.
+<p align="center"><img src="screenshots/Graph.png" width="280" alt="Graph"/></p>
+
+### Map
+Full-screen native map with pins for all Place and Person entities that have coordinates.
+<p align="center"><img src="screenshots/Map.png" width="280" alt="Map"/></p>
+
+### Smart Add
+Type a natural sentence and extract entity names as interactive chips using on-device NLP.
+<p align="center"><img src="screenshots/Smartadd.png" width="280" alt="Smart Add"/></p>
 
 ---
 
@@ -50,7 +68,7 @@ Create and manage five distinct entity types, each with a distinct color and ico
 | Concept | Purple | Ideas, frameworks, research topics |
 | Place | Green | Offices, venues, cities, remote hubs |
 
-Each entity stores a **name**, **type**, optional **notes**, optional **profile photo**, and for Place entities, real-world **coordinates**.
+Each entity stores a **name**, **type**, optional **notes**, optional **profile photo**, and for Place and Person entities, real-world **coordinates**.
 
 ### Deduplication Search
 
@@ -114,12 +132,15 @@ Accessible from the sparkles icon on the home screen, Smart Add lets you type a 
 
 ### Location & Map
 
-For Place-type entities:
+For Place and Person-type entities:
 
-- An **address search field** appears in Entity Creation and Edit, backed by `MKLocalSearch`
-- Selecting a search result stores `latitude` and `longitude` on the entity
+- **Three ways to set a location** in Entity Creation and Edit:
+  - **Current Location** — uses CoreLocation GPS to grab the device's coordinates
+  - **Select on Map** — opens a full-screen map picker that starts at the user's current location, with a center-pinned marker; pan the map and confirm
+  - **Manual search** — type an address and pick from `MKLocalSearch` results
+- Selecting a location stores `latitude` and `longitude` on the entity
 - The entity's detail view renders a small **embedded map** with a pin at the stored coordinates
-- The **Map tab** aggregates all Place entities with coordinates onto a full-screen native `Map`, with custom annotation callouts — tapping a pin navigates to that entity's detail view
+- The **Map tab** aggregates all Place and Person entities with coordinates onto a full-screen native `Map`, with custom annotation callouts — tapping a pin navigates to that entity's detail view
 
 ---
 
@@ -146,7 +167,7 @@ Entity
   ├── notes: String
   ├── imageData: Data?                ← JPEG thumbnail, max 200x200
   ├── positionX / positionY: Double   ← persisted graph canvas coordinates
-  ├── latitude / longitude: Double?   ← Place entities only
+  ├── latitude / longitude: Double?   ← Place & Person entities
   ├── outgoing: [Connection]          ← deleteRule .cascade
   └── incoming: [Connection]          ← deleteRule .cascade
 
@@ -192,6 +213,7 @@ Interlink/
 │   ├── DedupSearchService.swift        ← Normalized entity name matching
 │   ├── GraphLayoutEngine.swift         ← Off-main-thread radial + spring layout
 │   ├── ImageProcessingService.swift    ← 200x200 JPEG thumbnail compression
+│   ├── LocationManager.swift           ← CoreLocation GPS coordinates + reverse geocode
 │   ├── LocationSearchService.swift     ← MKLocalSearch address search + coordinates
 │   ├── NameExtractionService.swift     ← NLTagger on-device name extraction
 │   └── SampleData.swift               ← (disabled by default, no seeding on launch)
@@ -221,7 +243,8 @@ Interlink/
 │   ├── SmartAdd/
 │   │   └── SmartAddView.swift          ← NLP sentence input + extracted name chips
 │   └── Map/
-│       └── PlaceMapView.swift          ← Native Map tab with Place entity pins
+│       ├── PlaceMapView.swift          ← Native Map tab with Place & Person entity pins
+│       └── MapLocationPickerView.swift ← Full-screen map picker with center-pinned marker
 │
 ├── ContentView.swift    ← Root tab switcher
 └── InterlinkApp.swift   ← App entry point + SwiftData model container

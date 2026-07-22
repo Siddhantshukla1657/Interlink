@@ -73,8 +73,8 @@ struct EntityDetailView: View {
                     }
                     .padding(.top, 10)
 
-                    // Embedded Map for Place entities with coordinates
-                    if entity.type == .place, let lat = entity.latitude, let lon = entity.longitude {
+                    // Embedded Map for Place/Person entities with coordinates
+                    if (entity.type == .place || entity.type == .person), let lat = entity.latitude, let lon = entity.longitude {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("LOCATION")
                                 .font(.system(size: 11, weight: .bold, design: .rounded))

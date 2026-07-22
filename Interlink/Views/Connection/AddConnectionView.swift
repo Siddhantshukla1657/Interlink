@@ -239,9 +239,20 @@ struct AddConnectionView: View {
             targetEntity = existing
         } else {
             let trimmedName = targetName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let newEntity = Entity(name: trimmedName, type: targetType)
-            modelContext.insert(newEntity)
-            targetEntity = newEntity
+            let normalized = trimmedName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let descriptor = FetchDescriptor<Entity>(
+                predicate: #Predicate { $0.normalizedName == normalized }
+            )
+            let existingMatch = (try? modelContext.fetch(descriptor))?.first {
+                $0.id != sourceEntity.id
+            }
+            if let match = existingMatch {
+                targetEntity = match
+            } else {
+                let newEntity = Entity(name: trimmedName, type: targetType)
+                modelContext.insert(newEntity)
+                targetEntity = newEntity
+            }
         }
 
         // Validate self-connection

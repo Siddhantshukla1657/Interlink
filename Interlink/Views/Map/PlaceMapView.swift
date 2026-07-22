@@ -5,8 +5,8 @@ import MapKit
 struct PlaceMapView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(filter: #Predicate<Entity> { entity in
-        entity.typeRaw == "Place" && entity.latitude != nil && entity.longitude != nil
-    }) private var placeEntities: [Entity]
+        (entity.typeRaw == "Place" || entity.typeRaw == "Person") && entity.latitude != nil && entity.longitude != nil
+    }) private var mappedEntities: [Entity]
 
     @State private var position: MapCameraPosition = .automatic
     @State private var selectedEntity: Entity?
@@ -16,15 +16,15 @@ struct PlaceMapView: View {
             ZStack {
                 GlassBackground()
 
-                if placeEntities.isEmpty {
+                if mappedEntities.isEmpty {
                     EmptyStateView(
                         icon: "mappin.slash.circle.fill",
                         title: "No places mapped yet",
-                        subtitle: "Create a Place entity with an address to see it plotted on the map."
+                        subtitle: "Create a Place or Person entity with an address to see it plotted on the map."
                     )
                 } else {
                     Map(position: $position) {
-                        ForEach(placeEntities) { entity in
+                        ForEach(mappedEntities) { entity in
                             if let lat = entity.latitude, let lon = entity.longitude {
                                 Annotation(entity.name, coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon)) {
                                     Button {
